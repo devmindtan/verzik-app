@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, CheckCircle, XCircle, FileText, Eye, PenTool } from 'lucide-react';
 import { blockchainService } from '../services/blockchainService';
 import { authService } from '../services/authService';
@@ -19,12 +19,31 @@ export function DocumentManagementPage() {
   const [confirm, setConfirm] = useState<{ open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({
     open: false, title: '', message: '', variant: 'danger', onConfirm: () => {},
   });
+  const [tenants, setTenants] = useState<Awaited<ReturnType<typeof blockchainService.getTenants>>>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const canRegister = authService.hasPermission(session, 'register_document');
   const canCoSign = authService.hasPermission(session, 'cosign_document');
   const canRevoke = authService.hasPermission(session, 'revoke_document');
-  const tenants = blockchainService.getTenants();
-  const documents = blockchainService.getDocuments(selectedTenant);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [fetchedTenants, fetchedDocuments] = await Promise.all([
+        blockchainService.getTenants(),
+        blockchainService.getDocuments(selectedTenant),
+      ]);
+      setTenants(fetchedTenants);
+      setDocuments(fetchedDocuments);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [selectedTenant]);
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,14 +53,15 @@ export function DocumentManagementPage() {
       title: 'Register Document',
       message: `This will anchor "${registerForm.fileName}" on-chain with the provided file hash. This action is permanent and cannot be undone.`,
       variant: 'info',
-      onConfirm: () => {
-        blockchainService.registerDocument(
+      onConfirm: async () => {
+        await blockchainService.registerDocument(
           selectedTenant, registerForm.fileHash, registerForm.fileName, registerForm.docType,
           session?.address || '0x0',
           registerForm.amount ? { amount: parseFloat(registerForm.amount) } : undefined
         );
         setRegisterForm({ fileHash: '', fileName: '', docType: 'voucher', amount: '' });
         setShowRegisterModal(false);
+        await loadData();
       },
     });
   };
@@ -54,10 +74,11 @@ export function DocumentManagementPage() {
       title: 'Co-Sign Document',
       message: `This will add ${coSignForm.signer} as a co-signer to "${selectedDoc.fileName}". This signature is permanent and cannot be removed.`,
       variant: 'info',
-      onConfirm: () => {
-        blockchainService.coSignDocument(selectedTenant, selectedDoc.fileHash, coSignForm.signer);
+      onConfirm: async () => {
+        await blockchainService.coSignDocument(selectedTenant, selectedDoc.fileHash, coSignForm.signer);
         setCoSignForm({ signer: '' });
         setShowCoSignModal(false);
+        await loadData();
       },
     });
   };
@@ -68,8 +89,9 @@ export function DocumentManagementPage() {
       title: 'Revoke Document',
       message: `This will revoke "${doc.fileName}". The document will remain on-chain as a historical record but will be marked as invalid. Future verification attempts will show the revoked status. This cannot be undone.`,
       variant: 'danger',
-      onConfirm: () => {
-        blockchainService.revokeDocument(selectedTenant, doc.fileHash, session?.address || '0x0');
+      onConfirm: async () => {
+        await blockchainService.revokeDocument(selectedTenant, doc.fileHash, session?.address || '0x0');
+        await loadData();
       },
     });
   };
@@ -109,71 +131,75 @@ export function DocumentManagementPage() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Document</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Type</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">File Hash</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Co-Signers</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Status</th>
-                <th className="px-5 py-3 text-center font-semibold text-gray-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((doc) => (
-                <tr key={doc.id} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <FileText size={16} className="text-gray-400 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{doc.fileName}</p>
-                        <p className="text-xs text-gray-500">{doc.issuedAt.toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-semibold">{docTypeLabel[doc.docType] || doc.docType}</span>
-                  </td>
-                  <td className="px-5 py-3 text-xs text-gray-600"><TruncatedHash value={doc.fileHash} /></td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm font-semibold text-gray-900">{doc.coSigners.length}</span>
-                      <span className="text-gray-400 text-xs">signers</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex flex-col gap-1">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold w-fit ${doc.coSignQualified ? 'bg-teal-100 text-teal-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                        {doc.coSignQualified ? 'Qualified' : 'Pending'}
-                      </span>
-                      {!doc.isValid && (
-                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 w-fit">Revoked</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View details">
-                        <Eye size={16} />
-                      </button>
-                      {canCoSign && doc.isValid && !doc.coSignQualified && (
-                        <button onClick={() => { setSelectedDoc(doc); setShowCoSignModal(true); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Co-sign">
-                          <PenTool size={16} />
-                        </button>
-                      )}
-                      {canRevoke && doc.isValid && (
-                        <button onClick={() => handleRevoke(doc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Revoke">
-                          <XCircle size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+          {loading ? (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">Loading documents...</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Document</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Type</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">File Hash</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Co-Signers</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Status</th>
+                  <th className="px-5 py-3 text-center font-semibold text-gray-600">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {documents.length === 0 && (
+              </thead>
+              <tbody>
+                {documents.map((doc) => (
+                  <tr key={doc.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-gray-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{doc.fileName}</p>
+                          <p className="text-xs text-gray-500">{doc.issuedAt.toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-semibold">{docTypeLabel[doc.docType] || doc.docType}</span>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-600"><TruncatedHash value={doc.fileHash} /></td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-semibold text-gray-900">{doc.coSigners.length}</span>
+                        <span className="text-gray-400 text-xs">signers</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex flex-col gap-1">
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold w-fit ${doc.coSignQualified ? 'bg-teal-100 text-teal-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                          {doc.coSignQualified ? 'Qualified' : 'Pending'}
+                        </span>
+                        {!doc.isValid && (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 w-fit">Revoked</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View details">
+                          <Eye size={16} />
+                        </button>
+                        {canCoSign && doc.isValid && !doc.coSignQualified && (
+                          <button onClick={() => { setSelectedDoc(doc); setShowCoSignModal(true); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Co-sign">
+                            <PenTool size={16} />
+                          </button>
+                        )}
+                        {canRevoke && doc.isValid && (
+                          <button onClick={() => handleRevoke(doc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Revoke">
+                            <XCircle size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!loading && documents.length === 0 && (
             <div className="px-5 py-8 text-center text-gray-400 text-sm">No documents in this tenant.</div>
           )}
         </div>

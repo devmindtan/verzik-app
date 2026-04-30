@@ -147,7 +147,7 @@ export const authService = {
         'search_transactions',
         'view_own_documents',
       ],
-      none: ['view_public', 'verify_document', 'search_transactions', 'register_document', 'cosign_document'],
+      none: ['view_public', 'verify_document', 'search_transactions'],
     };
 
     return rolePermissions[session.role]?.includes(permission) || false;

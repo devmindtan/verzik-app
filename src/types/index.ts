@@ -86,7 +86,9 @@ export interface BlockchainEvent {
     | 'policy_updated'
     | 'treasury_updated'
     | 'config_updated'
-    | 'role_granted';
+    | 'role_granted'
+    | 'operator_recovery_delegate_updated'
+    | 'operator_metadata_updated';
   actor: string;
   description: string;
   timestamp: Date;

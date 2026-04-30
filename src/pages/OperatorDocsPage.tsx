@@ -37,7 +37,6 @@ export function OperatorDocsPage() {
     setLoading(true);
     const address = session!.address;
 
-    // Get all signatures by this operator
     const { data: mySigs } = await supabase
       .from('document_signatures')
       .select('document_id, signature_type, signed_at')
@@ -58,7 +57,6 @@ export function OperatorDocsPage() {
       .in('id', docIds)
       .order('issued_at', { ascending: false });
 
-    // Get all signatures for these documents
     const { data: allSigs } = await supabase
       .from('document_signatures')
       .select('*')

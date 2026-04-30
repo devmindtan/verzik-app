@@ -1,25 +1,32 @@
-import { useState } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Navigation } from './components/Navigation';
-import { FloatingSidebar } from './components/FloatingSidebar';
-import { AccountModal } from './components/AccountModal';
-import { LoginPage } from './pages/LoginPage';
-import { HomePage } from './pages/HomePage';
-import { DashboardPage } from './pages/DashboardPage';
-import { TenantManagementPage } from './pages/TenantManagementPage';
-import { OperatorManagementPage } from './pages/OperatorManagementPage';
-import { DocumentManagementPage } from './pages/DocumentManagementPage';
-import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
-import { DocumentVerifyPage } from './pages/DocumentVerifyPage';
-import { DocumentationPage } from './pages/DocumentationPage';
-import { EndUserPage } from './pages/EndUserPage';
-import { OperatorDocsPage } from './pages/OperatorDocsPage';
+import { useState } from "react";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { LanguageProvider } from "./contexts/LanguageContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { CompactProvider } from "./contexts/CompactContext";
+import { Navigation } from "./components/Navigation";
+import { FloatingSidebar } from "./components/FloatingSidebar";
+import { AccountModal } from "./components/AccountModal";
+import { ScrollToTop } from "./components/ScrollToTop";
+import { LoginPage } from "./pages/LoginPage";
+import { HomePage } from "./pages/HomePage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { TenantManagementPage } from "./pages/TenantManagementPage";
+import { OperatorManagementPage } from "./pages/OperatorManagementPage";
+import { DocumentManagementPage } from "./pages/DocumentManagementPage";
+import { TransactionHistoryPage } from "./pages/TransactionHistoryPage";
+import { DocumentVerifyPage } from "./pages/DocumentVerifyPage";
+import { DocumentationPage } from "./pages/DocumentationPage";
+import { EndUserPage } from "./pages/EndUserPage";
+import { OperatorDocsPage } from "./pages/OperatorDocsPage";
+import { CoSignPolicyPage } from "./pages/CoSignPolicyPage";
+import { ViolationPenaltyPage } from "./pages/ViolationPenaltyPage";
 
 function AppContent() {
   const { session, isLoading } = useAuth();
-  const [currentPage, setCurrentPage] = useState('home');
+  const [currentPage, setCurrentPage] = useState("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [transactionFilter, setTransactionFilter] = useState<string>("");
 
   if (isLoading) {
     return (
@@ -32,87 +39,120 @@ function AppContent() {
     );
   }
 
-  if (currentPage === 'home') {
-    return <HomePage onNavigate={setCurrentPage} />;
+  if (currentPage === "home") {
+    return (
+      <>
+        <HomePage onNavigate={setCurrentPage} />
+        <ScrollToTop />
+      </>
+    );
   }
 
-  if (currentPage === 'login') {
-    return <LoginPage onSuccess={() => setCurrentPage('dashboard')} />;
+  if (currentPage === "login") {
+    return (
+      <>
+        <LoginPage onSuccess={() => setCurrentPage("dashboard")} />
+        <ScrollToTop />
+      </>
+    );
   }
 
-  const navItems = getNavItems(session);
+  const navItems = getNavItems();
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'dashboard': return <DashboardPage />;
-      case 'tenants': return <TenantManagementPage />;
-      case 'operators': return <OperatorManagementPage />;
-      case 'documents': return <DocumentManagementPage />;
-      case 'transactions': return <TransactionHistoryPage />;
-      case 'verify': return <DocumentVerifyPage />;
-      case 'documentation': return <DocumentationPage />;
-      case 'my-documents': return <EndUserPage />;
-      case 'my-signed-docs': return <OperatorDocsPage />;
-      default: return <DashboardPage />;
+      case "dashboard":
+        return <DashboardPage />;
+      case "tenants":
+        return <TenantManagementPage />;
+      case "operators":
+        return <OperatorManagementPage />;
+      case "documents":
+        return <DocumentManagementPage />;
+      case "transactions":
+        return (
+          <TransactionHistoryPage initialActorFilter={transactionFilter} />
+        );
+      case "verify":
+        return <DocumentVerifyPage />;
+      case "documentation":
+        return <DocumentationPage />;
+      case "my-documents":
+        return <EndUserPage />;
+      case "my-signed-docs":
+        return <OperatorDocsPage />;
+      case "cosign-policies":
+        return <CoSignPolicyPage />;
+      case "violation-penalties":
+        return <ViolationPenaltyPage />;
+      default:
+        return <DashboardPage />;
     }
   };
 
+  const handleNavigate = (page: string, options?: { actorFilter?: string }) => {
+    setTransactionFilter(options?.actorFilter || "");
+    setCurrentPage(page);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Navigation
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-        navItems={navItems}
-        onOpenSidebar={() => setSidebarOpen(true)}
-        onOpenAccount={() => setAccountModalOpen(true)}
-      />
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        {renderPage()}
-      </main>
-      <Footer />
-      {session?.isConnected && (
-        <>
-          <FloatingSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-          <AccountModal open={accountModalOpen} onClose={() => setAccountModalOpen(false)} onNavigate={setCurrentPage} />
-        </>
-      )}
-    </div>
+    <>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors">
+        <Navigation
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          navItems={navItems}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          onOpenAccount={() => setAccountModalOpen(true)}
+        />
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+          {renderPage()}
+        </main>
+        <Footer />
+        {session?.isConnected && (
+          <>
+            <FloatingSidebar
+              open={sidebarOpen}
+              onClose={() => setSidebarOpen(false)}
+              onNavigate={handleNavigate}
+            />
+            <AccountModal
+              open={accountModalOpen}
+              onClose={() => setAccountModalOpen(false)}
+              onNavigate={handleNavigate}
+            />
+          </>
+        )}
+      </div>
+      <ScrollToTop />
+    </>
   );
 }
 
-function getNavItems(session: any) {
-  const items: { label: string; href: string; badge?: string }[] = [];
-
-  items.push({ label: 'Dashboard', href: 'dashboard' });
-  items.push({ label: 'Tenants', href: 'tenants' });
-  items.push({ label: 'Operators', href: 'operators' });
-  items.push({ label: 'Documents', href: 'documents' });
-  items.push({ label: 'Transactions', href: 'transactions' });
-  items.push({ label: 'Verify', href: 'verify' });
-  items.push({ label: 'Docs', href: 'documentation' });
-
-  // Personal pages based on role
-  if (session?.isConnected) {
-    if (session.role === 'end_user' || session.role === 'none') {
-      items.push({ label: 'My Documents', href: 'my-documents' });
-    }
-    if (session.role === 'tenant_operator' || session.role === 'none') {
-      items.push({ label: 'My Signatures', href: 'my-signed-docs' });
-    }
-  }
-
-  return items;
+function getNavItems() {
+  return [
+    { label: "Dashboard", href: "dashboard" },
+    { label: "Tenants", href: "tenants" },
+    { label: "Operators", href: "operators" },
+    { label: "Documents", href: "documents" },
+    { label: "Transactions", href: "transactions" },
+    { label: "Verify", href: "verify" },
+  ];
 }
 
 function Footer() {
   return (
-    <footer className="bg-slate-900 text-slate-400 mt-auto">
+    <footer className="bg-slate-900 dark:bg-black text-slate-400 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-3">
-          <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-cyan-400 rounded flex items-center justify-center text-slate-900 font-bold text-[10px]">VP</div>
-          <span>VoucherProtocol — Demo v2.0</span>
+          <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-cyan-400 rounded flex items-center justify-center text-slate-900 font-bold text-[10px]">
+            VP
+          </div>
+          <span>Verzik — Demo v2.0</span>
         </div>
-        <p className="text-slate-500">All data is in-memory. Resets on refresh. No real blockchain connection.</p>
+        <p className="text-slate-500">
+          Powered by Supabase. Data persists across sessions.
+        </p>
       </div>
     </footer>
   );
@@ -120,9 +160,15 @@ function Footer() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <CompactProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </LanguageProvider>
+      </CompactProvider>
+    </ThemeProvider>
   );
 }
 

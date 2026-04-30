@@ -1,17 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, ExternalLink } from 'lucide-react';
 import { blockchainService } from '../services/blockchainService';
 import { TruncatedHash } from '../components/TruncatedHash';
 import { BlockchainEvent } from '../types';
 
-export function TransactionHistoryPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+interface TransactionHistoryPageProps {
+  initialActorFilter?: string;
+}
+
+export function TransactionHistoryPage({ initialActorFilter = '' }: TransactionHistoryPageProps) {
+  const [searchQuery, setSearchQuery] = useState(initialActorFilter);
   const [filterType, setFilterType] = useState('');
   const [filterTenant, setFilterTenant] = useState('');
   const [showDetail, setShowDetail] = useState<BlockchainEvent | null>(null);
+  const [allEvents, setAllEvents] = useState<BlockchainEvent[]>([]);
+  const [tenants, setTenants] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const allEvents = blockchainService.getEvents();
-  const tenants = blockchainService.getTenants();
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [events, tenantList] = await Promise.all([
+      blockchainService.getEvents(),
+      blockchainService.getTenants(),
+    ]);
+    setAllEvents(events);
+    setTenants(tenantList.map((t) => ({ id: t.id, name: t.name })));
+    setLoading(false);
+  };
 
   // Apply filters
   let filteredEvents = [...allEvents];
@@ -134,50 +153,54 @@ export function TransactionHistoryPage() {
 
       {/* Transaction List */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Tx Hash</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Block</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Type</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Description</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Actor</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600">Time</th>
-                <th className="px-5 py-3 text-center font-semibold text-gray-600">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredEvents.slice(0, 50).map((event) => (
-                <tr key={event.id} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 text-xs text-blue-600 hover:text-blue-800 cursor-pointer" onClick={() => setShowDetail(event)}>
-                    <TruncatedHash value={event.txHash} />
-                  </td>
-                  <td className="px-5 py-3 text-xs text-gray-600">#{event.blockNumber}</td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${eventTypeColor[event.type] || 'bg-gray-100 text-gray-700'}`}>
-                      {eventTypeLabel[event.type] || event.type}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-gray-700 max-w-xs truncate">{event.description}</td>
-                  <td className="px-5 py-3 text-xs text-gray-600"><TruncatedHash value={event.actor} /></td>
-                  <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{event.timestamp.toLocaleTimeString()}</td>
-                  <td className="px-5 py-3 text-center">
-                    <button onClick={() => setShowDetail(event)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
-                      <ExternalLink size={14} />
-                    </button>
-                  </td>
+        {loading ? (
+          <div className="px-5 py-8 text-center text-gray-400 text-sm">Loading transactions...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Tx Hash</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Block</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Type</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Description</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Actor</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">Time</th>
+                  <th className="px-5 py-3 text-center font-semibold text-gray-600">Detail</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredEvents.length === 0 && (
-            <div className="px-5 py-8 text-center text-gray-400 text-sm">No transactions found.</div>
-          )}
-          {filteredEvents.length > 50 && (
-            <div className="px-5 py-3 text-center text-xs text-gray-500 border-t">Showing first 50 of {filteredEvents.length} transactions</div>
-          )}
-        </div>
+              </thead>
+              <tbody>
+                {filteredEvents.slice(0, 50).map((event) => (
+                  <tr key={event.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3 text-xs text-blue-600 hover:text-blue-800 cursor-pointer" onClick={() => setShowDetail(event)}>
+                      <TruncatedHash value={event.txHash} />
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-600">#{event.blockNumber}</td>
+                    <td className="px-5 py-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${eventTypeColor[event.type] || 'bg-gray-100 text-gray-700'}`}>
+                        {eventTypeLabel[event.type] || event.type}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-gray-700 max-w-xs truncate">{event.description}</td>
+                    <td className="px-5 py-3 text-xs text-gray-600"><TruncatedHash value={event.actor} /></td>
+                    <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{event.timestamp.toLocaleTimeString()}</td>
+                    <td className="px-5 py-3 text-center">
+                      <button onClick={() => setShowDetail(event)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
+                        <ExternalLink size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredEvents.length === 0 && (
+              <div className="px-5 py-8 text-center text-gray-400 text-sm">No transactions found.</div>
+            )}
+            {filteredEvents.length > 50 && (
+              <div className="px-5 py-3 text-center text-xs text-gray-500 border-t">Showing first 50 of {filteredEvents.length} transactions</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Detail Drawer */}
@@ -197,7 +220,7 @@ export function TransactionHistoryPage() {
               <DetailRow label="Timestamp" value={showDetail.timestamp.toLocaleString()} />
               <DetailRow label="Gas Used" value={`${showDetail.gasUsed.toLocaleString()} gas`} />
               {showDetail.tenantId && (
-                <DetailRow label="Tenant" value={`${blockchainService.getTenant(showDetail.tenantId)?.name || showDetail.tenantId} (${showDetail.tenantId})`} />
+                <DetailRow label="Tenant" value={`${tenants.find((t) => t.id === showDetail.tenantId)?.name || showDetail.tenantId} (${showDetail.tenantId})`} />
               )}
               {Object.keys(showDetail.data).length > 0 && (
                 <div>

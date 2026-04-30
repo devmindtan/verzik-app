@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Lock, Unlock, Eye, Zap, Flame, Coins } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Lock, Unlock, Eye, Zap, Flame, Coins, ShieldCheck, FileText } from 'lucide-react';
 import { blockchainService } from '../services/blockchainService';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,20 +14,46 @@ export function OperatorManagementPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showSlashModal, setShowSlashModal] = useState(false);
   const [showSoftSlashModal, setShowSoftSlashModal] = useState(false);
+  const [showDelegateModal, setShowDelegateModal] = useState(false);
+  const [showMetadataModal, setShowMetadataModal] = useState(false);
   const [selectedOp, setSelectedOp] = useState<Operator | null>(null);
   const [addForm, setAddForm] = useState({ address: '', stakeAmount: 1 });
   const [slashReason, setSlashReason] = useState('');
   const [softSlashForm, setSoftSlashForm] = useState({ penaltyBps: 1000, reason: '' });
+  const [delegateForm, setDelegateForm] = useState({ delegateAddress: '' });
+  const [metadataForm, setMetadataForm] = useState({ metadataURI: '' });
   const [confirm, setConfirm] = useState<{ open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({
     open: false, title: '', message: '', variant: 'danger', onConfirm: () => {},
   });
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [tenant, setTenant] = useState<any>(null);
 
   const canManage = authService.hasPermission(session, 'manage_operators');
-  const tenants = blockchainService.getTenants();
-  const operators = blockchainService.getOperators(selectedTenant);
-  const tenant = blockchainService.getTenant(selectedTenant);
 
-  const refresh = () => setSelectedTenant(selectedTenant);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [t, ops, ten] = await Promise.all([
+        blockchainService.getTenants(),
+        blockchainService.getOperators(selectedTenant),
+        blockchainService.getTenant(selectedTenant),
+      ]);
+      setTenants(t);
+      setOperators(ops);
+      setTenant(ten);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTenant]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const refresh = () => loadData();
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,11 +63,16 @@ export function OperatorManagementPage() {
       title: 'Add Operator',
       message: `This will add ${addForm.address} as an operator with ${addForm.stakeAmount} ETH stake. The stake will be locked on-chain.`,
       variant: 'info',
-      onConfirm: () => {
-        blockchainService.joinAsOperator(selectedTenant, addForm.address, addForm.stakeAmount);
-        setAddForm({ address: '', stakeAmount: 1 });
-        setShowAddModal(false);
-        refresh();
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.joinAsOperator(selectedTenant, addForm.address, addForm.stakeAmount);
+          setAddForm({ address: '', stakeAmount: 1 });
+          setShowAddModal(false);
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
       },
     });
   };
@@ -53,9 +84,14 @@ export function OperatorManagementPage() {
       title: op.isActive ? 'Deactivate Operator' : 'Activate Operator',
       message: `This will ${action} operator ${op.address}. ${op.isActive ? 'The operator will no longer be able to sign documents.' : 'The operator will resume signing capabilities.'}`,
       variant: 'warning',
-      onConfirm: () => {
-        blockchainService.setOperatorStatus(selectedTenant, op.address, !op.isActive, session?.address || '');
-        refresh();
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.setOperatorStatus(selectedTenant, op.address, !op.isActive, session?.address || '');
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
       },
     });
   };
@@ -67,12 +103,17 @@ export function OperatorManagementPage() {
       title: 'Slash Operator',
       message: `This will seize the operator's ENTIRE stake of ${selectedOp.stakeAmount} ETH and transfer it to the tenant treasury. The operator will be permanently deactivated. Reason: ${slashReason}`,
       variant: 'danger',
-      onConfirm: () => {
-        blockchainService.slashOperator(selectedTenant, selectedOp.address, slashReason, session?.address || '');
-        setSlashReason('');
-        setShowSlashModal(false);
-        setSelectedOp(null);
-        refresh();
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.slashOperator(selectedTenant, selectedOp.address, slashReason, session?.address || '');
+          setSlashReason('');
+          setShowSlashModal(false);
+          setSelectedOp(null);
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
       },
     });
   };
@@ -86,12 +127,17 @@ export function OperatorManagementPage() {
       title: 'Soft Slash Operator',
       message: `This will seize ${penalty}% (${amount} ETH) of the operator's stake. If remaining stake falls below minimum, the operator will be auto-deactivated. Reason: ${softSlashForm.reason}`,
       variant: 'warning',
-      onConfirm: () => {
-        blockchainService.softSlashOperator(selectedTenant, selectedOp.address, softSlashForm.penaltyBps, softSlashForm.reason, session?.address || '');
-        setSoftSlashForm({ penaltyBps: 1000, reason: '' });
-        setShowSoftSlashModal(false);
-        setSelectedOp(null);
-        refresh();
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.softSlashOperator(selectedTenant, selectedOp.address, softSlashForm.penaltyBps, softSlashForm.reason, session?.address || '');
+          setSoftSlashForm({ penaltyBps: 1000, reason: '' });
+          setShowSoftSlashModal(false);
+          setSelectedOp(null);
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
       },
     });
   };
@@ -102,9 +148,14 @@ export function OperatorManagementPage() {
       title: 'Request Unstake',
       message: `This will initiate the unstake process for operator ${op.address}. A cooldown period will begin before the stake can be withdrawn.`,
       variant: 'warning',
-      onConfirm: () => {
-        blockchainService.requestUnstake(selectedTenant, op.address);
-        refresh();
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.requestUnstake(selectedTenant, op.address);
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
       },
     });
   };
@@ -117,13 +168,92 @@ export function OperatorManagementPage() {
         title: 'Top Up Stake',
         message: `This will add ${amount} ETH to operator ${op.address}'s stake. Current stake: ${op.stakeAmount} ETH.`,
         variant: 'info',
-        onConfirm: () => {
-          blockchainService.topUpStake(selectedTenant, op.address, parseFloat(amount));
-          refresh();
+        onConfirm: async () => {
+          setActionLoading(true);
+          try {
+            await blockchainService.topUpStake(selectedTenant, op.address, parseFloat(amount));
+            await refresh();
+          } finally {
+            setActionLoading(false);
+          }
         },
       });
     }
   };
+
+  const handleExecuteUnstake = (op: Operator) => {
+    setConfirm({
+      open: true,
+      title: 'Execute Unstake',
+      message: `This will withdraw ${op.stakeAmount} ETH from operator ${op.address}. The operator will be deactivated and the stake returned.`,
+      variant: 'info',
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.executeUnstake(selectedTenant, op.address);
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleSetDelegate = () => {
+    if (!selectedOp || !delegateForm.delegateAddress) return;
+    setConfirm({
+      open: true,
+      title: 'Set Recovery Delegate',
+      message: `This will set ${delegateForm.delegateAddress} as the recovery delegate for operator ${selectedOp.address}. The delegate can recover the operator's account if the wallet is lost.`,
+      variant: 'info',
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.setRecoveryDelegate(selectedTenant, selectedOp.address, delegateForm.delegateAddress);
+          setShowDelegateModal(false);
+          setSelectedOp(null);
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleUpdateMetadata = () => {
+    if (!selectedOp) return;
+    setConfirm({
+      open: true,
+      title: 'Update Metadata',
+      message: `This will update the metadata URI for operator ${selectedOp.address}.`,
+      variant: 'info',
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          await blockchainService.updateOperatorMetadata(selectedTenant, selectedOp.address, metadataForm.metadataURI);
+          setShowMetadataModal(false);
+          setSelectedOp(null);
+          await refresh();
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Operator Management</h1>
+            <p className="text-gray-500 mt-1">Manage operator lifecycle, stakes, and penalties</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-400">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -133,7 +263,7 @@ export function OperatorManagementPage() {
           <p className="text-gray-500 mt-1">Manage operator lifecycle, stakes, and penalties</p>
         </div>
         {canManage && (
-          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm">
+          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm" disabled={actionLoading}>
             <Plus size={18} /> Add Operator
           </button>
         )}
@@ -142,7 +272,7 @@ export function OperatorManagementPage() {
       {/* Tenant selector */}
       <div className="bg-white rounded-xl shadow-sm border p-4 flex items-center gap-3">
         <label className="text-sm font-semibold text-gray-700">Tenant:</label>
-        <select value={selectedTenant} onChange={(e) => setSelectedTenant(e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+        <select value={selectedTenant} onChange={(e) => setSelectedTenant(e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" disabled={actionLoading}>
           {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
@@ -207,9 +337,20 @@ export function OperatorManagementPage() {
                   <td className="px-5 py-3 text-gray-600">{op.joinedAt.toLocaleDateString()}</td>
                   <td className="px-5 py-3 text-xs">
                     {op.pendingUnstakeAt ? (
-                      <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium">
-                        {op.pendingUnstakeAt.toLocaleDateString()}
-                      </span>
+                      <div>
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium">
+                          {op.pendingUnstakeAt.toLocaleDateString()}
+                        </span>
+                        {new Date() >= op.pendingUnstakeAt && (
+                          <button
+                            onClick={() => handleExecuteUnstake(op)}
+                            className="ml-2 text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-semibold hover:bg-blue-700 transition-colors"
+                            disabled={actionLoading}
+                          >
+                            Withdraw
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}
@@ -221,23 +362,29 @@ export function OperatorManagementPage() {
                       </button>
                       {canManage && (
                         <>
-                          <button onClick={() => handleTopUp(op)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Top-up stake">
+                          <button onClick={() => handleTopUp(op)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Top-up stake" disabled={actionLoading}>
                             <Coins size={16} />
                           </button>
-                          <button onClick={() => handleToggle(op)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title={op.isActive ? 'Deactivate' : 'Activate'}>
+                          <button onClick={() => handleToggle(op)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title={op.isActive ? 'Deactivate' : 'Activate'} disabled={actionLoading}>
                             {op.isActive ? <Lock size={16} className="text-yellow-600" /> : <Unlock size={16} className="text-green-600" />}
                           </button>
-                          <button onClick={() => { setSelectedOp(op); setShowSoftSlashModal(true); }} className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="Soft slash (partial penalty)">
+                          <button onClick={() => { setSelectedOp(op); setShowSoftSlashModal(true); }} className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="Soft slash (partial penalty)" disabled={actionLoading}>
                             <Zap size={16} />
                           </button>
-                          <button onClick={() => { setSelectedOp(op); setShowSlashModal(true); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Full slash (seize all stake)">
+                          <button onClick={() => { setSelectedOp(op); setShowSlashModal(true); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Full slash (seize all stake)" disabled={actionLoading}>
                             <Flame size={16} />
                           </button>
                           {op.isActive && !op.pendingUnstakeAt && (
-                            <button onClick={() => handleRequestUnstake(op)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors text-xs" title="Request unstake">
+                            <button onClick={() => handleRequestUnstake(op)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors text-xs" title="Request unstake" disabled={actionLoading}>
                               Exit
                             </button>
                           )}
+                          <button onClick={() => { setSelectedOp(op); setDelegateForm({ delegateAddress: op.recoveryDelegate || '' }); setShowDelegateModal(true); }} className="p-1.5 text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors" title="Set recovery delegate" disabled={actionLoading}>
+                            <ShieldCheck size={16} />
+                          </button>
+                          <button onClick={() => { setSelectedOp(op); setMetadataForm({ metadataURI: op.metadataURI || '' }); setShowMetadataModal(true); }} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Update metadata URI" disabled={actionLoading}>
+                            <FileText size={16} />
+                          </button>
                         </>
                       )}
                     </div>
@@ -260,7 +407,7 @@ export function OperatorManagementPage() {
             <Field label="Stake Amount (ETH)"><input type="number" step="0.1" value={addForm.stakeAmount} onChange={(e) => setAddForm({ ...addForm, stakeAmount: parseFloat(e.target.value) })} className="input" /></Field>
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1">Cancel</button>
-              <button type="submit" className="btn-primary flex-1">Add Operator</button>
+              <button type="submit" className="btn-primary flex-1" disabled={actionLoading}>{actionLoading ? 'Adding...' : 'Add Operator'}</button>
             </div>
           </form>
         </Modal>
@@ -323,7 +470,7 @@ export function OperatorManagementPage() {
             </Field>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowSlashModal(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleSlash} className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors">Slash Operator</button>
+              <button onClick={handleSlash} className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors" disabled={actionLoading}>{actionLoading ? 'Slashing...' : 'Slash Operator'}</button>
             </div>
           </div>
         </Modal>
@@ -345,7 +492,45 @@ export function OperatorManagementPage() {
             </Field>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowSoftSlashModal(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleSoftSlash} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors">Soft Slash</button>
+              <button onClick={handleSoftSlash} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors" disabled={actionLoading}>{actionLoading ? 'Slashing...' : 'Soft Slash'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Recovery Delegate Modal */}
+      {showDelegateModal && selectedOp && (
+        <Modal title="Set Recovery Delegate" onClose={() => setShowDelegateModal(false)}>
+          <div className="space-y-4">
+            <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3">
+              <p className="text-xs text-cyan-600 font-semibold">Operator</p>
+              <p className="text-sm text-cyan-800 font-mono"><TruncatedHash value={selectedOp.address} /></p>
+            </div>
+            <Field label="Delegate Address (trusted wallet for recovery)">
+              <input type="text" value={delegateForm.delegateAddress} onChange={(e) => setDelegateForm({ ...delegateForm, delegateAddress: e.target.value })} className="input font-mono text-sm" placeholder="0x... (can recover your account if wallet is lost)" />
+            </Field>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowDelegateModal(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={handleSetDelegate} className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm" disabled={actionLoading}>{actionLoading ? 'Setting...' : 'Set Delegate'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Metadata Modal */}
+      {showMetadataModal && selectedOp && (
+        <Modal title="Update Metadata URI" onClose={() => setShowMetadataModal(false)}>
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500">Operator</p>
+              <p className="text-sm text-gray-900 font-mono"><TruncatedHash value={selectedOp.address} /></p>
+            </div>
+            <Field label="Metadata URI (IPFS CID or URL)">
+              <input type="text" value={metadataForm.metadataURI} onChange={(e) => setMetadataForm({ ...metadataForm, metadataURI: e.target.value })} className="input font-mono text-sm" placeholder="ipfs://Qm... or https://..." />
+            </Field>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowMetadataModal(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={handleUpdateMetadata} className="btn-primary flex-1" disabled={actionLoading}>{actionLoading ? 'Updating...' : 'Update'}</button>
             </div>
           </div>
         </Modal>
@@ -356,7 +541,7 @@ export function OperatorManagementPage() {
         title={confirm.title}
         message={confirm.message}
         variant={confirm.variant}
-        confirmLabel="Confirm"
+        confirmLabel={actionLoading ? 'Processing...' : 'Confirm'}
         onConfirm={() => { confirm.onConfirm(); setConfirm({ ...confirm, open: false }); }}
         onCancel={() => setConfirm({ ...confirm, open: false })}
       />

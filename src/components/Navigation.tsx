@@ -1,23 +1,28 @@
-import { Menu, X, User, PanelRightOpen, LogIn } from 'lucide-react';
-import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { TruncatedHash } from './TruncatedHash';
+import { Menu, X, User, PanelRightOpen, LogIn } from "lucide-react";
+import { useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { TruncatedHash } from "./TruncatedHash";
 
 interface NavItem {
   label: string;
   href: string;
-  badge?: string;
 }
 
 interface NavigationProps {
   currentPage: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, options?: { actorFilter?: string }) => void;
   navItems: NavItem[];
   onOpenSidebar?: () => void;
   onOpenAccount?: () => void;
 }
 
-export function Navigation({ currentPage, onNavigate, navItems, onOpenSidebar, onOpenAccount }: NavigationProps) {
+export function Navigation({
+  currentPage,
+  onNavigate,
+  navItems,
+  onOpenSidebar,
+  onOpenAccount,
+}: NavigationProps) {
   const { session } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -27,12 +32,12 @@ export function Navigation({ currentPage, onNavigate, navItems, onOpenSidebar, o
         <div className="flex justify-between items-center h-14">
           <div
             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition"
-            onClick={() => onNavigate('home')}
+            onClick={() => onNavigate("home")}
           >
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center font-bold text-slate-900 text-xs">
               VP
             </div>
-            <span className="font-bold text-base hidden sm:inline">VoucherProtocol</span>
+            <span className="font-bold text-base hidden sm:inline">Verzik</span>
           </div>
 
           <div className="hidden md:flex items-center gap-0.5">
@@ -42,16 +47,11 @@ export function Navigation({ currentPage, onNavigate, navItems, onOpenSidebar, o
                 onClick={() => onNavigate(item.href)}
                 className={`px-2.5 py-1.5 rounded-lg transition-colors text-xs font-medium ${
                   currentPage === item.href
-                    ? 'bg-white/15 text-white font-semibold'
-                    : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                    ? "bg-white/15 text-white font-semibold"
+                    : "text-slate-300 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 {item.label}
-                {item.badge && (
-                  <span className="ml-1 px-1 py-0.5 text-[9px] bg-emerald-500 text-white rounded font-bold">
-                    {item.badge}
-                  </span>
-                )}
               </button>
             ))}
           </div>
@@ -72,7 +72,7 @@ export function Navigation({ currentPage, onNavigate, navItems, onOpenSidebar, o
                 <button
                   onClick={onOpenSidebar}
                   className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                  title="Sidebar"
+                  title="Quick Panel"
                 >
                   <PanelRightOpen size={16} />
                 </button>
@@ -80,14 +80,17 @@ export function Navigation({ currentPage, onNavigate, navItems, onOpenSidebar, o
             )}
             {!session?.isConnected && (
               <button
-                onClick={() => onNavigate('login')}
+                onClick={() => onNavigate("login")}
                 className="flex items-center gap-1 bg-cyan-600 hover:bg-cyan-700 px-3 py-1.5 rounded-lg transition-colors font-semibold text-xs"
               >
                 <LogIn size={12} />
                 <span className="hidden sm:inline">Login</span>
               </button>
             )}
-            <button className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            <button
+              className="md:hidden"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
@@ -104,8 +107,8 @@ export function Navigation({ currentPage, onNavigate, navItems, onOpenSidebar, o
                 }}
                 className={`block w-full text-left px-3 py-2 rounded-lg transition-colors text-sm ${
                   currentPage === item.href
-                    ? 'bg-white/15 text-white font-semibold'
-                    : 'text-slate-300 hover:bg-white/10'
+                    ? "bg-white/15 text-white font-semibold"
+                    : "text-slate-300 hover:bg-white/10"
                 }`}
               >
                 {item.label}
@@ -114,7 +117,7 @@ export function Navigation({ currentPage, onNavigate, navItems, onOpenSidebar, o
             {!session?.isConnected && (
               <button
                 onClick={() => {
-                  onNavigate('login');
+                  onNavigate("login");
                   setMobileMenuOpen(false);
                 }}
                 className="block w-full text-left px-3 py-2 rounded-lg transition-colors text-sm text-cyan-400 hover:bg-white/10 font-semibold"

@@ -17,7 +17,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
   const { lang, setLang, t } = useLanguage();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-[100dvh] bg-slate-950 text-white flex flex-col overflow-x-clip">
       {/* Hero */}
       <header className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-cyan-600/10" />

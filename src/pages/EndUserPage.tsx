@@ -15,6 +15,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { AppTooltip } from "../components/Tooltip";
 import { supabase } from "../lib/supabase";
 import { TruncatedHash } from "../components/TruncatedHash";
 
@@ -387,11 +388,11 @@ export function EndUserPage() {
       {/* Document Reader Modal */}
       {readerDoc && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={closeReader}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Reader Header */}
@@ -474,23 +475,27 @@ export function EndUserPage() {
                 {/* Toolbar */}
                 <div className="px-6 py-2 border-b flex items-center justify-between bg-gray-50 flex-shrink-0">
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setFontSize(Math.max(12, fontSize - 2))}
-                      className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-                      title="Decrease font size"
-                    >
-                      <ZoomOut size={14} className="text-gray-600" />
-                    </button>
+                    <AppTooltip content="Decrease font size">
+                      <button
+                        onClick={() => setFontSize(Math.max(12, fontSize - 2))}
+                        className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                        aria-label="Decrease font size"
+                      >
+                        <ZoomOut size={14} className="text-gray-600" />
+                      </button>
+                    </AppTooltip>
                     <span className="text-xs text-gray-500 w-8 text-center">
                       {fontSize}
                     </span>
-                    <button
-                      onClick={() => setFontSize(Math.min(24, fontSize + 2))}
-                      className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-                      title="Increase font size"
-                    >
-                      <ZoomIn size={14} className="text-gray-600" />
-                    </button>
+                    <AppTooltip content="Increase font size">
+                      <button
+                        onClick={() => setFontSize(Math.min(24, fontSize + 2))}
+                        className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                        aria-label="Increase font size"
+                      >
+                        <ZoomIn size={14} className="text-gray-600" />
+                      </button>
+                    </AppTooltip>
                   </div>
                   <div className="flex items-center gap-1 text-xs text-gray-500">
                     {(() => {

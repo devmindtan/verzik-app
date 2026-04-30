@@ -3,23 +3,27 @@ import {
   Building2,
   Users,
   FileText,
+  ShieldCheck,
   Activity,
-  TrendingUp,
-  AlertTriangle,
-  Zap,
 } from "lucide-react";
+import { HighlightText } from "../components/HighlightText";
+import { SearchInput } from "../components/SearchInput";
 import { useAuth } from "../contexts/AuthContext";
+import { includesNormalized } from "../lib/searchUtils";
 import { blockchainService } from "../services/blockchainService";
 import { authService } from "../services/authService";
+import { TablePagination } from "../components/TablePagination";
 import { TruncatedHash } from "../components/TruncatedHash";
 import { Tenant, Operator, Document, BlockchainEvent } from "../types";
 
 export function DashboardPage() {
+  const PAGE_SIZE = 8;
   const { session } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [events, setEvents] = useState<BlockchainEvent[]>([]);
+  const [tenantSearchQuery, setTenantSearchQuery] = useState("");
   const [stats, setStats] = useState({
     totalEvents: 0,
     byType: {} as Record<string, number>,
@@ -27,6 +31,7 @@ export function DashboardPage() {
     totalGasUsed: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     loadData();
@@ -56,14 +61,30 @@ export function DashboardPage() {
   };
 
   const activeOperators = operators.filter((o) => o.isActive).length;
-  const inactiveOperators = operators.length - activeOperators;
   const validDocuments = documents.filter((d) => d.isValid).length;
-  const revokedDocuments = documents.filter((d) => !d.isValid).length;
-  const qualifiedDocs = documents.filter(
-    (d) => d.coSignQualified && d.isValid,
-  ).length;
+  const qualifiedDocs = documents.filter((d) => d.coSignQualified).length;
   const totalStake = operators.reduce((sum, o) => sum + o.stakeAmount, 0);
-  const activeTenants = tenants.filter((t) => t.isActive).length;
+  const filteredTenants = tenants.filter((tenant) =>
+    includesNormalized(
+      `${tenant.name} ${tenant.id} ${tenant.admin} ${tenant.operatorManager} ${tenant.treasury}`,
+      tenantSearchQuery,
+    ),
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredTenants.length / PAGE_SIZE));
+  const paginatedTenants = filteredTenants.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tenantSearchQuery]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const eventTypeLabel: Record<string, string> = {
     tenant_created: "Tenant Created",
@@ -83,8 +104,6 @@ export function DashboardPage() {
     treasury_updated: "Treasury Updated",
     config_updated: "Config Updated",
     role_granted: "Role Granted",
-    operator_recovery_delegate_updated: "Delegate Updated",
-    operator_metadata_updated: "Metadata Updated",
   };
 
   const eventTypeColor: Record<string, string> = {
@@ -93,7 +112,7 @@ export function DashboardPage() {
     operator_staked: "bg-emerald-100 text-emerald-800",
     operator_slashed: "bg-red-100 text-red-800",
     operator_soft_slashed: "bg-orange-100 text-orange-800",
-    document_anchored: "bg-sky-100 text-sky-800",
+    document_anchored: "bg-indigo-100 text-indigo-800",
     document_cosigned: "bg-cyan-100 text-cyan-800",
     document_qualified: "bg-teal-100 text-teal-800",
     document_revoked: "bg-red-100 text-red-800",
@@ -112,421 +131,275 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">
-            {session?.isConnected ? (
-              <>
-                Signed in as{" "}
-                <span className="font-semibold text-gray-700">
-                  {authService.getRoleLabel(session?.role)}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-500 mt-1">
+          {session?.isConnected ? (
+            <>
+              Logged in as{" "}
+              <span className="font-semibold text-gray-700">
+                {authService.getRoleLabel(session?.role)}
+              </span>
+              {session?.tenantId && (
+                <span className="text-gray-400">
+                  {" "}
+                  — Tenant: {session.tenantId}
                 </span>
-                {session?.tenantId && (
-                  <span className="text-gray-400"> — {session.tenantId}</span>
-                )}
-              </>
-            ) : (
-              "System overview. Connect wallet to perform actions."
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <Activity size={14} className="text-green-500" />
-          <span>Live</span>
-        </div>
+              )}
+            </>
+          ) : (
+            "Overview of the VoucherProtocol system. Login to perform actions."
+          )}
+        </p>
       </div>
 
-      {/* Primary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard
           icon={<Building2 size={20} />}
           label="Tenants"
           value={tenants.length}
-          sub={`${activeTenants} active`}
-          accent="blue"
+          color="blue"
         />
-        <MetricCard
+        <StatCard
           icon={<Users size={20} />}
-          label="Operators"
+          label="Active Operators"
           value={activeOperators}
-          sub={
-            inactiveOperators > 0
-              ? `${inactiveOperators} inactive`
-              : "All active"
-          }
-          accent="emerald"
+          color="green"
         />
-        <MetricCard
+        <StatCard
           icon={<FileText size={20} />}
-          label="Documents"
+          label="Valid Documents"
           value={validDocuments}
-          sub={`${qualifiedDocs} qualified`}
-          accent="sky"
+          color="indigo"
         />
-        <MetricCard
-          icon={<TrendingUp size={20} />}
+        <StatCard
+          icon={<ShieldCheck size={20} />}
+          label="Qualified Docs"
+          value={qualifiedDocs}
+          color="teal"
+        />
+        <StatCard
+          icon={<Activity size={20} />}
           label="Total Stake"
-          value={`${totalStake.toFixed(1)}`}
-          unit="ETH"
-          sub={`${operators.length} stakers`}
-          accent="amber"
+          value={`${totalStake.toFixed(2)} ETH`}
+          color="amber"
         />
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Tenant cards */}
-        <div className="lg:col-span-3">
-          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2.5">
-            Tenants
-          </h2>
-
-          {tenants.length === 0 ? (
-            <div className="bg-white rounded-xl border p-8 text-center text-gray-400 text-sm">
-              No tenants created yet.
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border overflow-hidden">
-              <table
-                className="w-full text-sm border-collapse"
-                style={{ tableLayout: "fixed" }}
-              >
-                <colgroup>
-                  <col style={{ width: "22%" }} />
-                  <col style={{ width: "10%" }} />
-                  <col style={{ width: "11%" }} />
-                  <col style={{ width: "11%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "17%" }} />
-                  <col style={{ width: "17%" }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="px-3.5 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b">
-                      Name
-                    </th>
-                    <th className="px-3.5 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b">
-                      Status
-                    </th>
-                    <th className="px-3.5 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b">
-                      Operators
-                    </th>
-                    <th className="px-3.5 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b">
-                      Documents
-                    </th>
-                    <th className="px-3.5 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b">
-                      ETH Staked
-                    </th>
-                    <th className="px-3.5 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b">
-                      Admin
-                    </th>
-                    <th className="px-3.5 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b">
-                      Treasury
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tenants.map((t, i) => {
-                    const tOps = operators.filter((o) => o.tenantId === t.id);
-                    const tDocs = documents.filter((d) => d.tenantId === t.id);
-                    const tStake = tOps.reduce((s, o) => s + o.stakeAmount, 0);
-                    const tActiveOps = tOps.filter((o) => o.isActive).length;
-                    const tValidDocs = tDocs.filter((d) => d.isValid).length;
-                    return (
-                      <tr
-                        key={t.id}
-                        className={`hover:shadow-sm transition-shadow ${i < tenants.length - 1 ? "border-b" : ""}`}
-                      >
-                        <td className="px-3.5 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0">
-                              {t.name.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900 text-sm">
-                                {t.name}
-                              </p>
-                              <p className="text-[11px] text-gray-400">
-                                ID: {t.id}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3.5 py-3">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-semibold ${t.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}
-                          >
-                            {t.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                        <td className="px-3.5 py-3">
-                          <div className="bg-gray-50 rounded-lg px-2.5 py-1.5 inline-block">
-                            <p className="text-base font-bold text-gray-900">
-                              {tActiveOps}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-3.5 py-3">
-                          <div className="bg-gray-50 rounded-lg px-2.5 py-1.5 inline-block">
-                            <p className="text-base font-bold text-gray-900">
-                              {tValidDocs}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-3.5 py-3">
-                          <div className="bg-gray-50 rounded-lg px-2.5 py-1.5 inline-block">
-                            <p className="text-base font-bold text-gray-900">
-                              {tStake.toFixed(1)}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-3.5 py-3 text-[11px] text-gray-500">
-                          <TruncatedHash value={t.admin} />
-                        </td>
-                        <td className="px-3.5 py-3 text-[11px] text-gray-500">
-                          <TruncatedHash value={t.treasury} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        {/* Right: Activity + Alerts */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Alerts */}
-          {(revokedDocuments > 0 || inactiveOperators > 0) && (
-            <div className="space-y-2">
-              <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-                Alerts
-              </h2>
-              <div className="space-y-2">
-                {revokedDocuments > 0 && (
-                  <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-3.5">
-                    <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <AlertTriangle size={16} className="text-red-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-red-800">
-                        {revokedDocuments} Revoked Document
-                        {revokedDocuments > 1 ? "s" : ""}
-                      </p>
-                      <p className="text-xs text-red-600">Requires attention</p>
-                    </div>
-                  </div>
-                )}
-                {inactiveOperators > 0 && (
-                  <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
-                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Zap size={16} className="text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-amber-800">
-                        {inactiveOperators} Inactive Operator
-                        {inactiveOperators > 1 ? "s" : ""}
-                      </p>
-                      <p className="text-xs text-amber-600">
-                        Not currently signing
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Protocol Metrics */}
-          <div>
-            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-              Protocol Metrics
+      {/* Two columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="px-5 py-4 border-b bg-slate-50 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <h2 className="font-bold text-gray-900">
+              Tenants Overview ({filteredTenants.length}/{tenants.length})
             </h2>
-            <div className="bg-white rounded-xl border mt-2 divide-y">
-              <MetricRow
-                label="Total Events"
-                value={stats.totalEvents.toLocaleString()}
+            <div className="w-full lg:max-w-sm">
+              <SearchInput
+                value={tenantSearchQuery}
+                onChange={setTenantSearchQuery}
+                placeholder="Search tenants by name, id, admin, manager, or treasury..."
               />
-              <MetricRow label="Unique Actors" value={stats.uniqueActors} />
-              <MetricRow
-                label="Gas Consumed"
-                value={`${(stats.totalGasUsed / 1000).toFixed(0)}K`}
-              />
-              <MetricRow label="Co-Sign Qualified" value={qualifiedDocs} />
-              <MetricRow label="Revoked Docs" value={revokedDocuments} />
             </div>
           </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">
+                    Name
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">
+                    Admin
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">
+                    Op. Manager
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">
+                    Treasury
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedTenants.map((t) => (
+                  <tr
+                    key={t.id}
+                    className="border-b hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="px-5 py-3 font-medium text-gray-900">
+                      <HighlightText text={t.name} query={tenantSearchQuery} />
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-600">
+                      <span className="block max-w-[180px] truncate font-mono">
+                        <HighlightText
+                          text={t.admin}
+                          query={tenantSearchQuery}
+                        />
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-600">
+                      <span className="block max-w-[180px] truncate font-mono">
+                        <HighlightText
+                          text={t.operatorManager}
+                          query={tenantSearchQuery}
+                        />
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-600">
+                      <span className="block max-w-[180px] truncate font-mono">
+                        <HighlightText
+                          text={t.treasury}
+                          query={tenantSearchQuery}
+                        />
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}
+                      >
+                        {t.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {filteredTenants.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-5 py-8 text-center text-gray-400 text-sm"
+                    >
+                      {tenants.length === 0
+                        ? "No tenants available."
+                        : "No tenants match your search."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {filteredTenants.length > 0 && (
+            <TablePagination
+              totalItems={filteredTenants.length}
+              pageSize={PAGE_SIZE}
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+              itemLabel="tenants"
+            />
+          )}
+        </div>
 
-          {/* Event Breakdown - only top types */}
-          {Object.keys(stats.byType).length > 0 && (
-            <div>
-              <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-                Event Breakdown
-              </h2>
-              <div className="bg-white rounded-xl border mt-2 p-4 space-y-2.5">
-                {Object.entries(stats.byType)
-                  .sort(([, a], [, b]) => (b as number) - (a as number))
-                  .slice(0, 6)
-                  .map(([type, count]) => {
-                    const total = stats.totalEvents || 1;
-                    const pct = Math.round(((count as number) / total) * 100);
-                    return (
-                      <div key={type}>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-gray-600">
-                            {eventTypeLabel[type] || type}
-                          </span>
-                          <span className="font-semibold text-gray-900">
-                            {count as number}
-                          </span>
-                        </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gray-700 rounded-full transition-all"
-                            style={{ width: `${Math.max(pct, 2)}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+        <div className="bg-white rounded-xl shadow-sm border p-5">
+          <h2 className="font-bold text-gray-900 mb-4">Event Statistics</h2>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between pb-2 border-b">
+              <span className="text-gray-500">Total Events</span>
+              <span className="font-bold text-gray-900">
+                {stats.totalEvents}
+              </span>
+            </div>
+            <div className="flex justify-between pb-2 border-b">
+              <span className="text-gray-500">Unique Actors</span>
+              <span className="font-bold text-gray-900">
+                {stats.uniqueActors}
+              </span>
+            </div>
+            <div className="flex justify-between pb-2 border-b">
+              <span className="text-gray-500">Total Gas Used</span>
+              <span className="font-bold text-gray-900">
+                {(stats.totalGasUsed / 1000).toFixed(0)}K
+              </span>
+            </div>
+            <div className="pt-2">
+              <h3 className="font-semibold text-gray-700 mb-2">By Type</h3>
+              <div className="space-y-1.5">
+                {Object.entries(stats.byType).map(([type, count]) => (
+                  <div key={type} className="flex justify-between items-center">
+                    <span className="text-gray-500 text-xs">
+                      {eventTypeLabel[type] || type}
+                    </span>
+                    <span className="font-semibold text-gray-900 text-xs">
+                      {count}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Recent Activity */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-            Recent Activity
-          </h2>
-          <span className="text-xs text-gray-400">{events.length} events</span>
+      {/* Recent Events */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div className="px-5 py-4 border-b bg-slate-50 flex items-center justify-between">
+          <h2 className="font-bold text-gray-900">Recent Events</h2>
+          <span className="text-xs text-gray-500">{events.length} total</span>
         </div>
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <div className="max-h-72 overflow-y-auto divide-y">
-            {events.slice(0, 15).map((event) => (
-              <div
-                key={event.id}
-                className="px-5 py-3 hover:bg-gray-50/50 transition-colors"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-gray-900 truncate">
-                        {event.description}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-400">
-                        <TruncatedHash value={event.actor} />
-                        <span>Block #{event.blockNumber}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${eventTypeColor[event.type] || "bg-gray-100 text-gray-700"}`}
-                    >
-                      {eventTypeLabel[event.type] || event.type}
-                    </span>
-                    <span className="text-[11px] text-gray-400 whitespace-nowrap">
-                      {event.timestamp.toLocaleTimeString()}
-                    </span>
+        <div className="max-h-80 overflow-y-auto divide-y">
+          {events.slice(0, 15).map((event) => (
+            <div
+              key={event.id}
+              className="px-5 py-3 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900 font-medium">
+                    {event.description}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                    <TruncatedHash value={event.actor} />
+                    <span>Block #{event.blockNumber}</span>
+                    <span>{event.timestamp.toLocaleTimeString()}</span>
                   </div>
                 </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${eventTypeColor[event.type] || "bg-gray-100 text-gray-700"}`}
+                >
+                  {eventTypeLabel[event.type] || event.type}
+                </span>
               </div>
-            ))}
-            {events.length === 0 && (
-              <div className="px-5 py-8 text-center text-gray-400 text-sm">
-                No events recorded
-              </div>
-            )}
-          </div>
+            </div>
+          ))}
+          {events.length === 0 && (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">
+              No events recorded
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function MetricCard({
+function StatCard({
   icon,
   label,
   value,
-  unit,
-  sub,
-  accent,
+  color,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
-  unit?: string;
-  sub?: string;
-  accent: string;
+  color: string;
 }) {
-  const accentMap: Record<
-    string,
-    { border: string; icon: string; text: string }
-  > = {
-    blue: {
-      border: "border-l-blue-500",
-      icon: "text-blue-600 bg-blue-50",
-      text: "text-blue-700",
-    },
-    emerald: {
-      border: "border-l-emerald-500",
-      icon: "text-emerald-600 bg-emerald-50",
-      text: "text-emerald-700",
-    },
-    sky: {
-      border: "border-l-sky-500",
-      icon: "text-sky-600 bg-sky-50",
-      text: "text-sky-700",
-    },
-    amber: {
-      border: "border-l-amber-500",
-      icon: "text-amber-600 bg-amber-50",
-      text: "text-amber-700",
-    },
+  const colorMap: Record<string, string> = {
+    blue: "border-blue-400 bg-blue-50 text-blue-700",
+    green: "border-green-400 bg-green-50 text-green-700",
+    indigo: "border-indigo-400 bg-indigo-50 text-indigo-700",
+    teal: "border-teal-400 bg-teal-50 text-teal-700",
+    amber: "border-amber-400 bg-amber-50 text-amber-700",
   };
-  const a = accentMap[accent] || accentMap.blue;
   return (
-    <div className={`bg-white rounded-xl border border-l-4 ${a.border} p-5`}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-          {label}
-        </span>
-        <div
-          className={`w-9 h-9 rounded-lg flex items-center justify-center ${a.icon}`}
-        >
-          {icon}
-        </div>
+    <div
+      className={`rounded-xl border-l-4 p-4 ${colorMap[color] || colorMap.blue}`}
+    >
+      <div className="flex items-center gap-2 mb-1 opacity-60">
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
       </div>
-      <div className="flex items-baseline gap-1">
-        <p className="text-2xl font-bold text-gray-900 tracking-tight">
-          {value}
-        </p>
-        {unit && (
-          <span className="text-sm font-medium text-gray-500">{unit}</span>
-        )}
-      </div>
-      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-function MetricRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <span className="text-sm text-gray-600">{label}</span>
-      <span className="text-sm font-bold text-gray-900">{value}</span>
+      <p className="text-2xl font-bold">{value}</p>
     </div>
   );
 }

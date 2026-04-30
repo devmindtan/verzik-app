@@ -1,6 +1,7 @@
-import { Menu, X, User, PanelRightOpen, LogIn } from "lucide-react";
+import { Menu, X, User, PanelRightOpen, LogIn, Search } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { AppTooltip } from "./Tooltip";
 import { TruncatedHash } from "./TruncatedHash";
 
 interface NavItem {
@@ -14,6 +15,7 @@ interface NavigationProps {
   navItems: NavItem[];
   onOpenSidebar?: () => void;
   onOpenAccount?: () => void;
+  onOpenSearch?: () => void;
 }
 
 export function Navigation({
@@ -22,6 +24,7 @@ export function Navigation({
   navItems,
   onOpenSidebar,
   onOpenAccount,
+  onOpenSearch,
 }: NavigationProps) {
   const { session } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -57,27 +60,56 @@ export function Navigation({
           </div>
 
           <div className="flex items-center gap-2">
-            {session?.isConnected && (
-              <>
+            {/* Quick search button */}
+            <AppTooltip content="Quick Search (Ctrl+K)">
+              <button
+                onClick={onOpenSearch}
+                className="hidden sm:flex items-center gap-2 bg-white/8 hover:bg-white/15 border border-white/10 rounded-lg px-3 py-1.5 transition-colors text-slate-400 hover:text-white"
+                aria-label="Quick Search"
+              >
+                <Search size={13} />
+                <span className="text-xs">Search…</span>
+                <kbd className="text-[10px] font-mono bg-white/10 px-1 py-0.5 rounded border border-white/10 leading-none">
+                  ⌃K
+                </kbd>
+              </button>
+            </AppTooltip>
+            <AppTooltip content="Search">
+              <button
+                onClick={onOpenSearch}
+                className="sm:hidden p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Search"
+              >
+                <Search size={16} />
+              </button>
+            </AppTooltip>
+            <>
+              <AppTooltip content="Account & Settings">
                 <button
                   onClick={onOpenAccount}
                   className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 rounded-lg px-2.5 py-1.5 transition-colors"
-                  title="Account & Settings"
+                  aria-label="Account & Settings"
                 >
                   <User size={14} className="text-cyan-400" />
-                  <span className="hidden sm:inline text-xs text-slate-300 font-medium max-w-[80px] truncate">
-                    <TruncatedHash value={session.address} />
+                  <span className="hidden sm:inline text-xs text-slate-300 font-medium max-w-[110px] truncate">
+                    {session?.isConnected ? (
+                      <TruncatedHash value={session.address} disableCopy />
+                    ) : (
+                      "Guest"
+                    )}
                   </span>
                 </button>
+              </AppTooltip>
+              <AppTooltip content="Quick Panel">
                 <button
                   onClick={onOpenSidebar}
                   className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                  title="Quick Panel"
+                  aria-label="Quick Panel"
                 >
                   <PanelRightOpen size={16} />
                 </button>
-              </>
-            )}
+              </AppTooltip>
+            </>
             {!session?.isConnected && (
               <button
                 onClick={() => onNavigate("login")}

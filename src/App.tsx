@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { MantineProvider } from "@mantine/core";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
-import { ThemeProvider } from "./contexts/ThemeContext";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { CompactProvider } from "./contexts/CompactContext";
 import { Navigation } from "./components/Navigation";
 import { FloatingSidebar } from "./components/FloatingSidebar";
@@ -20,13 +21,27 @@ import { EndUserPage } from "./pages/EndUserPage";
 import { OperatorDocsPage } from "./pages/OperatorDocsPage";
 import { CoSignPolicyPage } from "./pages/CoSignPolicyPage";
 import { ViolationPenaltyPage } from "./pages/ViolationPenaltyPage";
+import { QuickSearchDialog } from "./components/QuickSearchDialog";
 
 function AppContent() {
   const { session, isLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<string>("");
+
+  // Ctrl+K global shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setQuickSearchOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   if (isLoading) {
     return (
@@ -57,6 +72,8 @@ function AppContent() {
     );
   }
 
+  const canViewMySignatures = session?.role === "tenant_operator";
+
   const navItems = getNavItems();
 
   const renderPage = () => {
@@ -80,7 +97,7 @@ function AppContent() {
       case "my-documents":
         return <EndUserPage />;
       case "my-signed-docs":
-        return <OperatorDocsPage />;
+        return canViewMySignatures ? <OperatorDocsPage /> : <DashboardPage />;
       case "cosign-policies":
         return <CoSignPolicyPage />;
       case "violation-penalties":
@@ -104,25 +121,29 @@ function AppContent() {
           navItems={navItems}
           onOpenSidebar={() => setSidebarOpen(true)}
           onOpenAccount={() => setAccountModalOpen(true)}
+          onOpenSearch={() => setQuickSearchOpen(true)}
         />
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
           {renderPage()}
         </main>
         <Footer />
-        {session?.isConnected && (
-          <>
-            <FloatingSidebar
-              open={sidebarOpen}
-              onClose={() => setSidebarOpen(false)}
-              onNavigate={handleNavigate}
-            />
-            <AccountModal
-              open={accountModalOpen}
-              onClose={() => setAccountModalOpen(false)}
-              onNavigate={handleNavigate}
-            />
-          </>
-        )}
+        <QuickSearchDialog
+          open={quickSearchOpen}
+          onClose={() => setQuickSearchOpen(false)}
+          onNavigate={handleNavigate}
+        />
+        <>
+          <FloatingSidebar
+            open={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            onNavigate={handleNavigate}
+          />
+          <AccountModal
+            open={accountModalOpen}
+            onClose={() => setAccountModalOpen(false)}
+            onNavigate={handleNavigate}
+          />
+        </>
       </div>
       <ScrollToTop />
     </>
@@ -158,16 +179,34 @@ function Footer() {
   );
 }
 
+function MantineThemeBridge({ children }: { children: React.ReactNode }) {
+  const { isDark } = useTheme();
+  return (
+    <MantineProvider
+      forceColorScheme={isDark ? "dark" : "light"}
+      theme={{
+        primaryColor: "blue",
+        defaultRadius: "md",
+        fontFamily: "inherit",
+      }}
+    >
+      {children}
+    </MantineProvider>
+  );
+}
+
 function App() {
   return (
     <ThemeProvider>
-      <CompactProvider>
-        <LanguageProvider>
-          <AuthProvider>
-            <AppContent />
-          </AuthProvider>
-        </LanguageProvider>
-      </CompactProvider>
+      <MantineThemeBridge>
+        <CompactProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </LanguageProvider>
+        </CompactProvider>
+      </MantineThemeBridge>
     </ThemeProvider>
   );
 }

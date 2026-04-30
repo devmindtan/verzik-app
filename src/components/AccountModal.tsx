@@ -32,7 +32,12 @@ export function AccountModal({ open, onClose, onNavigate }: AccountModalProps) {
   const { compact, setCompact } = useCompact();
   const [activeTab, setActiveTab] = useState<"profile" | "settings">("profile");
 
-  if (!open || !session) return null;
+  if (!open) return null;
+
+  const isConnected = !!session?.isConnected;
+  const walletAddress = session?.address || "Guest Mode";
+  const role = session?.role || "none";
+  const tenantId = session?.tenantId;
 
   const roleColorMap: Record<string, string> = {
     protocol_admin: "bg-red-100 text-red-800 border-red-200",
@@ -58,7 +63,7 @@ export function AccountModal({ open, onClose, onNavigate }: AccountModalProps) {
     onNavigate("home");
   };
 
-  const isOperator = session.role === "none";
+  const canViewMySignatures = session?.role === "tenant_operator";
 
   return (
     <div
@@ -82,19 +87,23 @@ export function AccountModal({ open, onClose, onNavigate }: AccountModalProps) {
           </div>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center text-2xl font-bold text-cyan-400">
-              {session.address.slice(2, 4).toUpperCase()}
+              {isConnected ? walletAddress.slice(2, 4).toUpperCase() : "G"}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${roleColorMap[session.role] || roleColorMap.none}`}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${roleColorMap[role] || roleColorMap.none}`}
                 >
-                  {roleIconMap[session.role]}
-                  {authService.getRoleLabel(session.role)}
+                  {roleIconMap[role]}
+                  {isConnected ? authService.getRoleLabel(role) : "Guest"}
                 </span>
               </div>
               <p className="text-sm text-white/70 mt-1.5">
-                <TruncatedHash value={session.address} />
+                {isConnected ? (
+                  <TruncatedHash value={walletAddress} />
+                ) : (
+                  walletAddress
+                )}
               </p>
             </div>
           </div>
@@ -124,8 +133,17 @@ export function AccountModal({ open, onClose, onNavigate }: AccountModalProps) {
                 <p className="text-xs text-gray-500 mb-1">
                   {t("account.wallet")}
                 </p>
-                <div className="flex items-center gap-2">
-                  <TruncatedHash value={session.address} />
+                <div className="flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 px-3 py-2 text-gray-900 dark:text-slate-100">
+                  {isConnected ? (
+                    <TruncatedHash
+                      value={walletAddress}
+                      className="text-sm text-gray-900 dark:text-slate-100"
+                    />
+                  ) : (
+                    <span className="text-sm text-gray-900 dark:text-slate-100">
+                      Connect a wallet or sign in to access role-aware actions.
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -134,20 +152,22 @@ export function AccountModal({ open, onClose, onNavigate }: AccountModalProps) {
                   {t("account.role")}
                 </p>
                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {authService.getRoleLabel(session.role)}
+                  {isConnected ? authService.getRoleLabel(role) : "Guest"}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {authService.getRoleDescription(session.role)}
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  {isConnected
+                    ? authService.getRoleDescription(role)
+                    : "Basic public access. You can still browse docs, verify documents, search transactions, and change local settings."}
                 </p>
               </div>
 
-              {session.tenantId && (
+              {tenantId && (
                 <div>
                   <p className="text-xs text-gray-500 mb-1">
                     {t("account.tenant")}
                   </p>
                   <p className="text-sm text-gray-900 dark:text-gray-100">
-                    {session.tenantId}
+                    {tenantId}
                   </p>
                 </div>
               )}
@@ -157,26 +177,32 @@ export function AccountModal({ open, onClose, onNavigate }: AccountModalProps) {
                   {t("account.connection")}
                 </p>
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full" />
-                  <span className="text-sm text-emerald-700 font-medium">
-                    {t("account.connected")}
+                  <span
+                    className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500" : "bg-amber-500"}`}
+                  />
+                  <span
+                    className={`text-sm font-medium ${isConnected ? "text-emerald-700" : "text-amber-700 dark:text-amber-400"}`}
+                  >
+                    {isConnected ? t("account.connected") : "Guest access"}
                   </span>
                 </div>
               </div>
 
               <div className="pt-4 border-t space-y-2 dark:border-slate-700">
                 {/* My Documents - available for ALL roles */}
-                <button
-                  onClick={() => {
-                    onClose();
-                    onNavigate("my-documents");
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-cyan-700 hover:bg-cyan-50 rounded-lg transition-colors font-medium"
-                >
-                  <FileText size={14} /> {t("account.myDocuments")}
-                </button>
+                {isConnected && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onNavigate("my-documents");
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-cyan-700 hover:bg-cyan-50 rounded-lg transition-colors font-medium"
+                  >
+                    <FileText size={14} /> {t("account.myDocuments")}
+                  </button>
+                )}
                 {/* My Signatures - only for operators */}
-                {isOperator && (
+                {canViewMySignatures && (
                   <button
                     onClick={() => {
                       onClose();
@@ -187,23 +213,37 @@ export function AccountModal({ open, onClose, onNavigate }: AccountModalProps) {
                     <PenTool size={14} /> {t("account.mySignatures")}
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    onClose();
-                    onNavigate("transactions", {
-                      actorFilter: session.address,
-                    });
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                >
-                  <ExternalLink size={14} /> {t("account.myTransactions")}
-                </button>
-                <button
-                  onClick={handleDisconnect}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <Wallet size={14} /> {t("account.disconnect")}
-                </button>
+                {isConnected ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        onClose();
+                        onNavigate("transactions", {
+                          actorFilter: walletAddress,
+                        });
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    >
+                      <ExternalLink size={14} /> {t("account.myTransactions")}
+                    </button>
+                    <button
+                      onClick={handleDisconnect}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Wallet size={14} /> {t("account.disconnect")}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onNavigate("login");
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-cyan-700 hover:bg-cyan-50 rounded-lg transition-colors font-medium"
+                  >
+                    <Wallet size={14} /> Login / Connect Wallet
+                  </button>
+                )}
               </div>
             </div>
           )}

@@ -34,13 +34,18 @@ export function Navigation({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-14">
           <div
-            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition"
+            className="flex items-center gap-1 cursor-pointer hover:opacity-80 transition"
             onClick={() => onNavigate("home")}
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center font-bold text-slate-900 text-xs">
-              VP
+            <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
+              {/* Thay 'logo.png' bằng tên file thật của bạn trong thư mục public */}
+              <img
+                src="/verzik.svg"
+                alt="Verzik Logo"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <span className="font-bold text-base hidden sm:inline">Verzik</span>
+            <span className="font-bold text-xl">Verzik</span>
           </div>
 
           <div className="hidden md:flex items-center gap-0.5">

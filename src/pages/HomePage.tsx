@@ -25,11 +25,17 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
           <nav className="flex items-center justify-between mb-16">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center font-bold text-slate-900 text-sm">
-                VK
+            <div className="flex items-center gap-1">
+              {/* Container bọc Logo */}
+              <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
+                {/* Thay 'logo.png' bằng tên file thật của bạn trong thư mục public */}
+                <img
+                  src="/verzik.svg"
+                  alt="Verzik Logo"
+                  className="w-full h-full object-cover"
+                />
               </div>
-              <span className="font-bold text-lg">Verzik</span>
+              <span className="font-bold text-xl">Verzik</span>
             </div>
             <div className="flex items-center gap-3">
               {/* Language toggle */}
